@@ -1,0 +1,191 @@
+// This is your Prisma schema file for Pattern 1: Main + Dedicated Translation Tables
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client-pattern1"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL_PATTERN1")
+}
+
+enum Locale {
+  ja
+  en
+  zh_cn
+  zh_tw
+  ko
+}
+
+// === Main Tables (Japanese content) ===
+
+model Article {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  content     String   @db.Text
+  summary     String?  @db.VarChar(500)
+  slug        String   @unique @db.VarChar(255)
+  categoryId  Int
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category     Category           @relation(fields: [categoryId], references: [id])
+  comments     Comment[]
+  tags         ArticleTag[]
+  metadata     ArticleMetadata?
+  translations ArticleTranslation[]
+
+  @@index([categoryId])
+  @@index([published, publishedAt])
+  @@index([slug])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  slug        String   @unique @db.VarChar(100)
+  parentId    Int?
+  displayOrder Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent       Category?             @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children     Category[]            @relation("CategoryToCategory")
+  articles     Article[]
+  translations CategoryTranslation[]
+
+  @@index([parentId])
+  @@index([slug])
+}
+
+model Tag {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles     ArticleTag[]
+  translations TagTranslation[]
+
+  @@index([name])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  articleId Int
+  author    String   @db.VarChar(100)
+  email     String   @db.VarChar(255)
+  content   String   @db.Text
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article      Article              @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  translations CommentTranslation[]
+
+  @@index([articleId])
+  @@index([approved])
+}
+
+model ArticleTag {
+  articleId Int
+  tagId     Int
+  createdAt DateTime @default(now())
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+}
+
+model ArticleMetadata {
+  id               Int      @id @default(autoincrement())
+  articleId        Int      @unique
+  metaTitle        String?  @db.VarChar(255)
+  metaDescription  String?  @db.VarChar(500)
+  metaKeywords     String?  @db.VarChar(255)
+  ogTitle          String?  @db.VarChar(255)
+  ogDescription    String?  @db.VarChar(500)
+  ogImage          String?  @db.VarChar(500)
+  twitterCard      String?  @db.VarChar(50)
+  twitterTitle     String?  @db.VarChar(255)
+  twitterDescription String? @db.VarChar(500)
+  twitterImage     String?  @db.VarChar(500)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+// === Translation Tables ===
+
+model ArticleTranslation {
+  id        Int      @id @default(autoincrement())
+  articleId Int
+  locale    Locale
+  title     String   @db.VarChar(255)
+  content   String   @db.Text
+  summary   String?  @db.VarChar(500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, locale])
+  @@index([articleId])
+  @@index([locale])
+}
+
+model CategoryTranslation {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+  locale      Locale
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, locale])
+  @@index([categoryId])
+  @@index([locale])
+}
+
+model TagTranslation {
+  id          Int      @id @default(autoincrement())
+  tagId       Int
+  locale      Locale
+  name        String   @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tagId, locale])
+  @@index([tagId])
+  @@index([locale])
+}
+
+model CommentTranslation {
+  id        Int      @id @default(autoincrement())
+  commentId Int
+  locale    Locale
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, locale])
+  @@index([commentId])
+  @@index([locale])
+}

@@ -1,0 +1,155 @@
+// This is your Prisma schema file for Pattern 2: Unified Translation Table
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client-pattern2"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL_PATTERN2")
+}
+
+enum Locale {
+  en
+  zh_cn
+  zh_tw
+  ko
+}
+
+enum EntityType {
+  ARTICLE
+  CATEGORY
+  TAG
+  COMMENT
+}
+
+// === Main Tables (Japanese content) ===
+
+model Article {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  content     String   @db.Text
+  summary     String?  @db.VarChar(500)
+  slug        String   @unique @db.VarChar(255)
+  categoryId  Int
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category     Category           @relation(fields: [categoryId], references: [id])
+  comments     Comment[]
+  tags         ArticleTag[]
+  metadata     ArticleMetadata?
+  translations Translation[]      @relation("ArticleTranslations")
+
+  @@index([categoryId])
+  @@index([published, publishedAt])
+  @@index([slug])
+}
+
+model Category {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(100)
+  description  String?  @db.VarChar(500)
+  slug         String   @unique @db.VarChar(100)
+  parentId     Int?
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  parent       Category?     @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children     Category[]    @relation("CategoryToCategory")
+  articles     Article[]
+  translations Translation[] @relation("CategoryTranslations")
+
+  @@index([parentId])
+  @@index([slug])
+}
+
+model Tag {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles     ArticleTag[]
+  translations Translation[] @relation("TagTranslations")
+
+  @@index([name])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  articleId Int
+  author    String   @db.VarChar(100)
+  email     String   @db.VarChar(255)
+  content   String   @db.Text
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article      Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  translations Translation[] @relation("CommentTranslations")
+
+  @@index([articleId])
+  @@index([approved])
+}
+
+model ArticleTag {
+  articleId Int
+  tagId     Int
+  createdAt DateTime @default(now())
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+}
+
+model ArticleMetadata {
+  id                 Int      @id @default(autoincrement())
+  articleId          Int      @unique
+  metaTitle          String?  @db.VarChar(255)
+  metaDescription    String?  @db.VarChar(500)
+  metaKeywords       String?  @db.VarChar(255)
+  ogTitle            String?  @db.VarChar(255)
+  ogDescription      String?  @db.VarChar(500)
+  ogImage            String?  @db.VarChar(500)
+  twitterCard        String?  @db.VarChar(50)
+  twitterTitle       String?  @db.VarChar(255)
+  twitterDescription String?  @db.VarChar(500)
+  twitterImage       String?  @db.VarChar(500)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+// === Unified Translation Table ===
+
+model Translation {
+  id         Int        @id @default(autoincrement())
+  entityType EntityType
+  entityId   Int
+  locale     Locale
+  fieldName  String     @db.VarChar(50) // 'title', 'content', 'summary', 'name', 'description', etc.
+  fieldValue String     @db.Text
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  // Relations using conditional foreign keys
+  article  Article?  @relation("ArticleTranslations", fields: [entityId], references: [id], onDelete: Cascade, map: "Translation_articleId_fkey")
+  category Category? @relation("CategoryTranslations", fields: [entityId], references: [id], onDelete: Cascade, map: "Translation_categoryId_fkey")
+  tag      Tag?      @relation("TagTranslations", fields: [entityId], references: [id], onDelete: Cascade, map: "Translation_tagId_fkey")
+  comment  Comment?  @relation("CommentTranslations", fields: [entityId], references: [id], onDelete: Cascade, map: "Translation_commentId_fkey")
+
+  @@unique([entityType, entityId, locale, fieldName])
+  @@index([entityType, entityId])
+  @@index([locale])
+  @@index([entityType, locale])
+}

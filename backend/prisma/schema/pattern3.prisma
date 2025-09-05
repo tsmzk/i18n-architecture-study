@@ -1,0 +1,164 @@
+// This is your Prisma schema file for Pattern 3: JSON Column Management
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client-pattern3"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL_PATTERN3")
+}
+
+// === Main Tables with JSON Translation Columns ===
+
+model Article {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  content     String   @db.Text
+  summary     String?  @db.VarChar(500)
+  slug        String   @unique @db.VarChar(255)
+  categoryId  Int
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  viewCount   Int      @default(0)
+  
+  // JSON translation columns
+  titleTranslations   Json? // { "en": "Title in English", "zh-cn": "中文标题", ... }
+  contentTranslations Json? // { "en": "Content in English", "zh-cn": "中文内容", ... }  
+  summaryTranslations Json? // { "en": "Summary in English", "zh-cn": "中文摘要", ... }
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category           @relation(fields: [categoryId], references: [id])
+  comments Comment[]
+  tags     ArticleTag[]
+  metadata ArticleMetadata?
+
+  @@index([categoryId])
+  @@index([published, publishedAt])
+  @@index([slug])
+}
+
+model Category {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(100)
+  description  String?  @db.VarChar(500)
+  slug         String   @unique @db.VarChar(100)
+  parentId     Int?
+  displayOrder Int      @default(0)
+  
+  // JSON translation columns
+  nameTranslations        Json? // { "en": "Technology", "zh-cn": "技术", ... }
+  descriptionTranslations Json? // { "en": "Tech articles", "zh-cn": "技术文章", ... }
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryToCategory")
+  articles Article[]
+
+  @@index([parentId])
+  @@index([slug])
+}
+
+model Tag {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  
+  // JSON translation columns
+  nameTranslations        Json? // { "en": "JavaScript", "zh-cn": "JavaScript", ... }
+  descriptionTranslations Json? // { "en": "JS related", "zh-cn": "JS相关", ... }
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles ArticleTag[]
+
+  @@index([name])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  articleId Int
+  author    String   @db.VarChar(100)
+  email     String   @db.VarChar(255)
+  content   String   @db.Text
+  approved  Boolean  @default(false)
+  
+  // JSON translation columns
+  contentTranslations Json? // { "en": "Comment in English", "zh-cn": "中文评论", ... }
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+  @@index([approved])
+}
+
+model ArticleTag {
+  articleId Int
+  tagId     Int
+  createdAt DateTime @default(now())
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+}
+
+model ArticleMetadata {
+  id                 Int      @id @default(autoincrement())
+  articleId          Int      @unique
+  metaTitle          String?  @db.VarChar(255)
+  metaDescription    String?  @db.VarChar(500)
+  metaKeywords       String?  @db.VarChar(255)
+  ogTitle            String?  @db.VarChar(255)
+  ogDescription      String?  @db.VarChar(500)
+  ogImage            String?  @db.VarChar(500)
+  twitterCard        String?  @db.VarChar(50)
+  twitterTitle       String?  @db.VarChar(255)
+  twitterDescription String?  @db.VarChar(500)
+  twitterImage       String?  @db.VarChar(500)
+  
+  // JSON translation columns
+  metaTitleTranslations          Json?
+  metaDescriptionTranslations    Json?
+  metaKeywordsTranslations       Json?
+  ogTitleTranslations            Json?
+  ogDescriptionTranslations      Json?
+  twitterTitleTranslations       Json?
+  twitterDescriptionTranslations Json?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+// === Product Examples for Additional Testing ===
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  sku         String   @unique @db.VarChar(100)
+  categoryId  Int?
+  
+  // JSON translation columns
+  nameTranslations        Json? // { "en": "Product Name", "zh-cn": "产品名称", ... }
+  descriptionTranslations Json? // { "en": "Product Description", "zh-cn": "产品描述", ... }
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([sku])
+}
